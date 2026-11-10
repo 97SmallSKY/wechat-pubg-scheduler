@@ -1,0 +1,8 @@
+.openai/hosting.json
+.env
+*.env
+dist/
+__pycache__/
+*.pyc
+*.sqlite*
+.DS_Store

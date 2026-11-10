@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="配置 PUBG 微信日报，查看 AWS 战绩预览。">
+  <title>PUBG 微信日报控制台</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header class="mast">
+    <div class="bar wrap">
+      <div class="brand"><span class="mark" aria-hidden="true">P</span><span>PUBG <small>日报控制台</small></span></div>
+      <span class="badge"><span class="dot"></span> 私有工作区</span>
+    </div>
+  </header>
+  <main class="wrap">
+    <section class="hero" aria-labelledby="title">
+      <div>
+        <p class="eyebrow">BATTLEGROUNDS / DAILY REPORT</p>
+        <h1 id="title">微信战绩日报</h1>
+        <p>设置每天的战绩查询时间、Steam 名单和群成员映射。</p>
+      </div>
+      <div class="schedule" aria-label="已保存的定时配置">
+        <span class="eyebrow">DAILY · UTC+08</span>
+        <div id="saved-time">23:00</div>
+        <span id="schedule-status">正在加载配置</span>
+      </div>
+    </section>
+    <div class="notice"><span class="chip">预览阶段</span><span>任务在 AWS 生成日报草稿。微信群和原生提及验证完成后，再接入发送。</span></div>
+    <div class="layout">
+      <section class="panel" aria-labelledby="config-title">
+        <div class="panel-head"><div><p class="eyebrow">01 / CONFIG</p><h2 id="config-title">任务配置</h2></div></div>
+        <form id="config-form">
+          <fieldset id="fields" disabled>
+            <div class="row">
+              <label class="field"><span>每日时间 <small>北京时间</small></span><input type="time" id="time" required value="23:00"></label>
+              <label class="switch"><input type="checkbox" id="enabled">启用每日预览</label>
+            </div>
+            <label class="field"><span>目标微信群 <small>可留空</small></span><input id="group" maxlength="80" placeholder="填写微信群名，留待发送验证"></label>
+            <div class="players-head"><h3>Steam 玩家</h3><button class="quiet" type="button" id="add">＋ 添加玩家</button></div>
+            <div class="player-labels" id="player-labels"><span>Steam 游戏昵称</span><span>微信成员昵称（可选）</span></div>
+            <div id="players"></div>
+            <p id="empty-players" class="muted">添加至少一位 Steam 玩家，即可生成预览。</p>
+            <div class="actions">
+              <button class="primary" type="submit">保存配置</button>
+              <button class="secondary" type="button" id="preview">立即预览</button>
+            </div>
+          </fieldset>
+          <p id="feedback" role="status" aria-live="polite"></p>
+        </form>
+      </section>
+      <section class="panel" aria-labelledby="runs-title">
+        <div class="panel-head"><div><p class="eyebrow">02 / ACTIVITY</p><h2 id="runs-title">运行记录</h2></div><button class="quiet" type="button" id="refresh">刷新</button></div>
+        <p class="worker"><span class="dot" id="worker-dot"></span><span id="worker-status">正在检查 AWS 执行器</span></p>
+        <div id="runs"></div>
+        <p id="empty-runs" class="muted empty-runs">暂无运行记录。保存名单后可提交预览。</p>
+      </section>
+    </div>
+    <footer>数据来源 PUBG 官方 API · 报告按北京时间统计</footer>
+  </main>
+</body>
+</html>

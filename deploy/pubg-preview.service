@@ -1,0 +1,11 @@
+[Unit]
+Description=Process one PUBG daily report preview from Sites
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/opt/wechat-automation/pubg-api.env
+EnvironmentFile=/opt/wechat-pubg-scheduler/runner.env
+ExecStart=/usr/bin/python3 /opt/wechat-pubg-scheduler/runner/run.py
+TimeoutStartSec=840
