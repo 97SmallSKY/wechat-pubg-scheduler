@@ -106,10 +106,10 @@ class RelayAPITest(unittest.TestCase):
 
     def test_image_api_and_owner_isolation(self):
         png = images.PNG + b"fixture"
-        with patch.object(images, "convert", return_value=png) as renderer:
+        with patch.object(images, "render", return_value=png) as renderer:
             status, result = self.http("/v1/images/generate", {"title": "测试 <图>", "metrics": [{"label": "人数", "value": 2}]})
             self.assertEqual(status, 201)
-            self.assertIn(b"&lt;", renderer.call_args[0][1])
+            self.assertIn(b"&lt;", renderer.call_args[0][2])
         self.assertEqual(self.http(result["path"]), (200, png))
         self.assertEqual(self.http(result["path"], token="bob-token")[0], 404)
         self.assertEqual(self.http("/v1/images/upload", b"not a png")[0], 400)

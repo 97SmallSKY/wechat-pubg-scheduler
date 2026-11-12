@@ -59,7 +59,7 @@ curl -fsS "$RELAY_URL/v1/idioms/chain" \
 
 Python 3.6+。应用只监听本机 `127.0.0.1:9016`，由独立的 HTTPS 入口转发。图片渲染使用 Docker。微信发送复用现有的 `watch-replies`、`send-group`、`wechat_report.py` 和微信窗口锁。服务器从 `/opt/wechat-automation/archive.env` 读取 `WECHAT_ARCHIVE_GROUPS` 的别名配置。发送功能依赖服务器的微信登录状态。
 
-1. 构建渲染器 `docker build -f deploy/relay-image.Dockerfile -t relay-image:1 .`。
+1. 构建渲染器 `docker build -f deploy/relay-image.Dockerfile -t relay-image:2 .`。
 2. 安装 `relay/` 到 `/opt/relay-wechat-api/current/`。创建私有状态目录，并在 `/opt/relay-wechat-api/relay.env` 设置 `RELAY_STATE=/opt/relay-wechat-api/state`、`RELAY_VERSION` 为提交版本。
 3. 在安装目录执行 `python3 -m relay.keys /opt/relay-wechat-api/state/keys.json issue developer-name test`。命令仅在创建时输出凭据，服务器只保存摘要。使用相同名称重新签发会轮换凭据，使用 `revoke developer-name` 会撤销该凭据。
 4. 安装并启动 `deploy/relay-wechat-api.service`。使用已有的 HTTPS 反向代理，或安装 `deploy/relay-wechat-tunnel.service` 用 Cloudflare Quick Tunnel 提供开发联调入口。该公网地址会在隧道进程重启后改变。 [Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)

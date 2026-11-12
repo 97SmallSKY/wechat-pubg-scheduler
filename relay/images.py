@@ -17,14 +17,14 @@ def text(value, label, limit, optional=False):
     return value
 
 
-def convert(arguments, payload):
+def render(program, arguments, payload):
     command = [
         "/usr/bin/docker", "run", "--rm", "-i", "--network", "none", "--read-only",
         "--user", "65534:65534", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
         "--pids-limit", "24", "--memory", "160m", "--cpus", "1",
         "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m,mode=1777",
-        os.environ.get("RELAY_IMAGE", "relay-image:1"),
-        "-limit", "thread", "1", "-limit", "memory", "96MiB", "-limit", "disk", "0",
+        "--entrypoint", "/usr/bin/timeout", os.environ.get("RELAY_IMAGE", "relay-image:2"),
+        "18", program,
     ]
     try:
         result = subprocess.run(command + arguments, input=payload, stdout=subprocess.PIPE,
@@ -42,9 +42,10 @@ def normalize(payload):
     width, height = struct.unpack(">II", payload[16:24])
     if not 0 < width <= 4096 or not 0 < height <= 4096 or width * height > 12000000:
         raise ValueError("PNG 每边最多 4096 像素，总像素不超过 1200 万")
-    return convert(["png:-", "-strip", "-resize", "710x860>", "-background", "#121c2b",
-                    "-alpha", "remove", "-gravity", "center", "-extent", "768x960",
-                    "-depth", "8", "png24:-"], payload)
+    return render("/usr/bin/convert", ["-limit", "thread", "1", "-limit", "memory", "96MiB", "-limit", "disk", "0",
+                                       "png:-", "-strip", "-resize", "710x860>", "-background", "#121c2b",
+                                       "-alpha", "remove", "-gravity", "center", "-extent", "768x960",
+                                       "-depth", "8", "png24:-"], payload)
 
 
 def generate(values):
@@ -82,5 +83,4 @@ def generate(values):
         draw(420, y, 20, "#a83b21", value)
         y += 45
     svg.append("</svg>")
-    return convert(["-background", "#121c2b", "svg:-", "-depth", "8", "png24:-"],
-                   "".join(svg).encode("utf-8"))
+    return render("/usr/bin/rsvg-convert", [], "".join(svg).encode("utf-8"))
