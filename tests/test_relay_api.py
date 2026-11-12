@@ -22,6 +22,7 @@ class RelayAPITest(unittest.TestCase):
         cls.credentials = {
             "alice": {"digest": digest("alice-token"), "groups": ["test"]},
             "bob": {"digest": digest("bob-token"), "groups": []},
+            "workspace": {"digest": digest("workspace-token"), "groups": [], "workspace": True},
         }
         cls.write_keys(cls.credentials)
         cls.service = Relay(cls.root, cls.keys, {"test": "虚构测试群", "other": "虚构其他群"})
@@ -46,7 +47,7 @@ class RelayAPITest(unittest.TestCase):
         with self.service.db() as db:
             db.execute("DELETE FROM deliveries")
 
-    def http(self, path, body=None, token="alice-token", key=None):
+    def http(self, path, body=None, token="alice-token", key=None, method=None, content_type=None):
         headers = {"Authorization": "Bearer " + token} if token else {}
         if key:
             headers["Idempotency-Key"] = key
@@ -54,8 +55,8 @@ class RelayAPITest(unittest.TestCase):
             body = json.dumps(body, ensure_ascii=False).encode()
             headers["Content-Type"] = "application/json"
         elif isinstance(body, bytes):
-            headers["Content-Type"] = "image/png"
-        request = Request("http://127.0.0.1:" + str(self.server.server_port) + path, body, headers)
+            headers["Content-Type"] = content_type or "image/png"
+        request = Request("http://127.0.0.1:" + str(self.server.server_port) + path, body, headers, method=method)
         try:
             response = urlopen(request, timeout=5)
         except HTTPError as error:
@@ -138,6 +139,44 @@ class RelayAPITest(unittest.TestCase):
         restarted = Relay(self.root, self.keys, self.service.groups)
         self.assertEqual(restarted.receipt("alice", second["id"])["state"], "review")
         self.assertFalse(restarted.send_next(sender))
+
+    def test_workspace_credential_and_sql_validation(self):
+        sql = "/v1/workspace/sql"
+        self.assertEqual(self.http(sql, {"sql": "SELECT 1"}, token=None)[0], 401)
+        self.assertEqual(self.http(sql, {"sql": "SELECT 1"})[0], 403)
+        self.assertEqual(self.http("/v1/groups", token="workspace-token")[0], 403)
+        self.assertEqual(self.http(sql, {"sql": "  "}, token="workspace-token")[0], 400)
+        self.assertEqual(self.http(sql, {"sql": "SELECT 1", "params": {}}, token="workspace-token")[0], 400)
+        with patch.object(Relay, "workspace_query", return_value=(200, {"rows": [[1]]})) as query:
+            self.assertEqual(self.http(sql, {"sql": "SELECT %s", "params": [1]}, token="workspace-token"),
+                             (200, {"rows": [[1]]}))
+            query.assert_called_once_with({"sql": "SELECT %s", "params": [1]})
+
+    def test_workspace_file_lifecycle(self):
+        prefix = "/v1/workspace/files"
+        token = "workspace-token"
+        directory = prefix + "/notes"
+        file = directory + "/%E8%AE%B0%E5%BD%95.txt"
+        self.assertEqual(self.http(prefix)[0], 403)
+        self.assertEqual(self.http(directory, token=token, method="POST")[0], 201)
+        for data in (b"first", b"revised", b""):
+            self.assertEqual(self.http(file, data, token=token, method="PUT",
+                                       content_type="application/octet-stream"),
+                             (200, {"type": "file", "size": len(data)}))
+            self.assertEqual(self.http(file, token=token), (200, data))
+        self.assertEqual(self.http(directory, token=token)[1]["entries"],
+                         [{"name": "记录.txt", "type": "file", "size": 0}])
+        self.assertEqual(self.http(directory, token=token, method="DELETE")[0], 409)
+        self.assertEqual(self.http(file, token=token, method="DELETE")[0], 200)
+        self.assertEqual(self.http(file, token=token)[0], 404)
+        self.assertEqual(self.http(directory, token=token, method="DELETE")[0], 200)
+
+    def test_workspace_blocks_paths_outside_root(self):
+        token = "workspace-token"
+        prefix = "/v1/workspace/files/"
+        self.assertEqual(self.http(prefix + "%2e%2e/keys.json", token=token)[0], 400)
+        (self.service.workspace / "outside").symlink_to(self.keys)
+        self.assertEqual(self.http(prefix + "outside", token=token)[0], 400)
 
 
 if __name__ == "__main__":

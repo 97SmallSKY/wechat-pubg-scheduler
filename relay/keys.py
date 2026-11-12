@@ -22,14 +22,19 @@ def main():
     parser.add_argument("action", choices=("issue", "revoke"))
     parser.add_argument("name")
     parser.add_argument("groups", nargs="*")
+    parser.add_argument("--workspace", action="store_true", help="Issue a credential for SQL and workspace files")
     args = parser.parse_args()
     if any(not IDENTIFIER.fullmatch(value) for value in [args.name] + args.groups):
         parser.error("Name and group IDs use lowercase letters, numbers and hyphens")
+    if args.workspace and (args.action != "issue" or args.groups):
+        parser.error("A workspace credential has no WeChat group permissions")
     entries = json.loads(args.path.read_text(encoding="utf-8")) if args.path.exists() else {}
     token = None
     if args.action == "issue":
         token = secrets.token_urlsafe(32)
         entries[args.name] = {"digest": digest(token), "groups": sorted(set(args.groups))}
+        if args.workspace:
+            entries[args.name]["workspace"] = True
     else:
         entries.pop(args.name, None)
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=str(args.path.parent),

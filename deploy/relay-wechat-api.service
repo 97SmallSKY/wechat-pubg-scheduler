@@ -9,6 +9,7 @@ Type=simple
 WorkingDirectory=/opt/relay-wechat-api/current
 EnvironmentFile=/opt/wechat-automation/archive.env
 EnvironmentFile=/opt/relay-wechat-api/relay.env
+EnvironmentFile=-/opt/relay-wechat-api/workspace.env
 Environment=HOME=/root LANG=en_US.utf8 PYTHONIOENCODING=utf-8 PYTHONDONTWRITEBYTECODE=1
 ExecStart=/usr/bin/python3 -m relay.server
 Restart=on-failure

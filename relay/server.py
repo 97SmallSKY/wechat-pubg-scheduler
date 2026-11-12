@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from socketserver import ThreadingMixIn
 
-from . import idioms, images
+from . import idioms, images, workspace
 from .keys import digest
 
 LOG = logging.getLogger(__name__)
@@ -47,6 +47,8 @@ class Relay:
         self.groups = groups
         self.version = version
         (state / "images").mkdir(parents=True, exist_ok=True)
+        self.workspace = (state / "workspace-files").resolve()
+        self.workspace.mkdir(mode=0o700, exist_ok=True)
         with self.db() as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript("""
@@ -79,8 +81,31 @@ class Relay:
             hashed = digest(header[7:])
             for owner, entry in json.loads(self.keys.read_text(encoding="utf-8")).items():
                 if hmac.compare_digest(hashed, entry["digest"]):
-                    return owner, entry["groups"]
+                    return owner, entry
         raise APIError(401, "需要有效的 Bearer 凭据")
+
+    @staticmethod
+    def workspace_query(body):
+        sql = body.get("sql")
+        params = body.get("params")
+        if not isinstance(sql, str) or not sql.strip() or "\x00" in sql:
+            raise APIError(400, "sql 需要非空字符串")
+        if params is not None and not isinstance(params, list):
+            raise APIError(400, "params 需要 JSON 数组")
+        dsn = os.environ.get("RELAY_WORKSPACE_DSN")
+        if not dsn:
+            raise APIError(503, "开发数据库尚未配置")
+        env = {key: os.environ[key] for key in ("PYTHONPATH", "LANG", "PYTHONIOENCODING") if key in os.environ}
+        env["RELAY_WORKSPACE_DSN"] = dsn
+        try:
+            result = subprocess.run([sys.executable, "-m", "relay.workspace_sql"],
+                                    input=encode({"sql": sql, "params": params}).encode("utf-8"),
+                                    stdout=subprocess.PIPE, env=env, timeout=14, check=True)
+        except subprocess.TimeoutExpired as error:
+            raise APIError(408, "开发数据库查询超时") from error
+        except subprocess.CalledProcessError as error:
+            raise APIError(503, "开发数据库暂时不可用") from error
+        return json.loads(result.stdout.decode("utf-8"))
 
     def save_image(self, owner, png):
         image = uuid.uuid4().hex
@@ -197,12 +222,63 @@ class Handler(BaseHTTPRequestHandler):
         binary = isinstance(data, bytes)
         content = data if binary else encode(data).encode("utf-8")
         self.send_response(status)
-        self.send_header("Content-Type", "image/png" if binary else "application/json; charset=utf-8")
+        if isinstance(data, workspace.Download):
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Disposition", "attachment")
+        else:
+            self.send_header("Content-Type", "image/png" if binary else "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(content)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(content)
+
+    def read_body(self, limit, media_type, allow_empty=False):
+        length = int(self.headers.get("Content-Length", "0"))
+        minimum = 0 if allow_empty else 1
+        if not minimum <= length <= limit:
+            raise APIError(400, "请求体为空或超出大小限制")
+        if self.headers.get_content_type() != media_type:
+            raise APIError(415, "请求体需要 " + media_type)
+        data = self.rfile.read(length)
+        if len(data) != length:
+            raise APIError(400, "请求体不完整")
+        return data
+
+    def read_json(self):
+        value = json.loads(self.read_body(16384, "application/json").decode("utf-8"))
+        if not isinstance(value, dict):
+            raise APIError(400, "请求体需要 JSON 对象")
+        return value
+
+    def workspace_route(self, service, method, path):
+        if path == "/v1/workspace/sql" and method == "POST":
+            return service.workspace_query(self.read_json())
+
+        prefix = "/v1/workspace/files"
+        if path != prefix and not path.startswith(prefix + "/"):
+            raise APIError(404, "工作区接口不存在")
+        root = service.workspace
+        target = workspace.file_path(root, path[len(prefix) + 1:])
+        if method == "GET":
+            if target.is_dir():
+                return 200, workspace.list_directory(target)
+            if target.stat().st_size > workspace.MAX_FILE:
+                raise APIError(413, "单个文件最大 16 MiB")
+            return 200, workspace.Download(target.read_bytes())
+        if target == root:
+            raise APIError(400, "请指定工作目录内的路径")
+        if method == "POST":
+            target.mkdir()
+            return 201, {"type": "directory"}
+        if method == "PUT":
+            data = self.read_body(workspace.MAX_FILE, "application/octet-stream", allow_empty=True)
+            workspace.put_file(root, target, data)
+            return 200, {"type": "file", "size": len(data)}
+        if method == "DELETE":
+            workspace.remove_path(target)
+            return 200, {"deleted": True}
+        raise APIError(405, "工作区不支持此请求方法")
 
     def route(self):
         service = self.server.relay
@@ -210,7 +286,13 @@ class Handler(BaseHTTPRequestHandler):
         method = self.command
         if method == "GET" and path == "/healthz":
             return 200, {"status": "ok", "version": service.version}
-        owner, groups = service.authenticate(self.headers.get("Authorization"))
+        owner, credential = service.authenticate(self.headers.get("Authorization"))
+        is_workspace = path.startswith("/v1/workspace/")
+        if is_workspace != credential.get("workspace", False):
+            raise APIError(403, "凭据未获准访问此接口")
+        if is_workspace:
+            return self.workspace_route(service, method, path.partition("?")[0])
+        groups = credential["groups"]
         if method == "GET":
             if path == "/v1/groups":
                 return 200, {"groups": [group for group in groups if group in service.groups]}
@@ -221,21 +303,10 @@ class Handler(BaseHTTPRequestHandler):
             if delivery:
                 return 200, service.receipt(owner, delivery[1])
         elif method == "POST":
-            raw_png = path == "/v1/images/upload"
-            length = int(self.headers.get("Content-Length", "0"))
-            if not 0 < length <= (images.MAX_PNG if raw_png else 16384):
-                raise APIError(400, "请求体为空或超出大小限制")
-            content_type = self.headers.get_content_type()
-            if content_type != ("image/png" if raw_png else "application/json"):
-                raise APIError(415, "请求体需要 image/png" if raw_png else "请求体需要 application/json")
-            raw = self.rfile.read(length)
-            if len(raw) != length:
-                raise APIError(400, "请求体不完整")
-            if raw_png:
+            if path == "/v1/images/upload":
+                raw = self.read_body(images.MAX_PNG, "image/png")
                 return 201, service.save_image(owner, images.normalize(raw))
-            body = json.loads(raw.decode("utf-8"))
-            if not isinstance(body, dict):
-                raise APIError(400, "请求体需要 JSON 对象")
+            body = self.read_json()
             if path == "/v1/images/generate":
                 return 201, service.save_image(owner, images.generate(body))
             if path == "/v1/idioms/chain":
@@ -255,6 +326,10 @@ class Handler(BaseHTTPRequestHandler):
                 status, data = 400, {"error": "请求体不是有效 UTF-8 JSON"}
             except ValueError as error:
                 status, data = 400, {"error": str(error)}
+            except (FileNotFoundError, NotADirectoryError):
+                status, data = 404, {"error": "文件或目录不存在"}
+            except (FileExistsError, IsADirectoryError):
+                status, data = 409, {"error": "路径已存在、类型冲突或目录非空"}
             except (OSError, sqlite3.OperationalError) as error:
                 LOG.error("request failed: %s", type(error).__name__)
                 status, data = 503, {"error": "服务暂时不可用"}
@@ -262,7 +337,7 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError, TimeoutError):
             self.close_connection = True
 
-    do_GET = do_POST = request
+    do_GET = do_POST = do_PUT = do_DELETE = request
 
 
 def main():

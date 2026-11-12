@@ -72,3 +72,13 @@ Python 3.6+。应用只监听本机 `127.0.0.1:9016`，由公网入口转发。�
 在云防火墙放行入站 TCP 19016 供 HTTP API 使用。现有 HTTPS 使用 TCP 443，证书签发和续期使用 TCP 80。将 `deploy/relay-wechat.Caddyfile` 安装到 `/opt/relay-wechat-api/Caddyfile`，在 `/opt/relay-wechat-api/public.env` 设置 `RELAY_PUBLIC_IP`。创建同目录下的 `caddy-data` 和 `caddy-config`，保留证书续期状态。拉取 `caddy:2-alpine` 并启动 `deploy/relay-wechat-https.service`。Caddy 使用 Let's Encrypt 短期 IP 证书并自动续期。 [Let's Encrypt IP 地址证书](https://letsencrypt.org/2026/01/15/6day-and-ip-general-availability)
 
 在仓库根目录执行 `python3 -m unittest discover -s tests` 与 `npm test`。
+
+
+### 数据库与文件工作区
+
+[工作区 API 与 curl 示例](../skills/relay-workspace/references/api.md)提供独立开发库和工作目录的 SQL 与文件操作。工作区使用 HTTPS 和单独的凭据。可用 `python3 -m relay.keys /opt/relay-wechat-api/state/keys.json issue developer-workspace --workspace` 签发。普通微信凭据的群授权不授予工作区权限。
+
+1. 在现有 PostgreSQL 上执行 `deploy/relay-workspace.sql`，通过 psql 变量 `workspace_password` 传入新密码。该脚本创建 `relay_developer` 和独立登录角色 `relay_workspace`。
+2. 在 PostgreSQL 的 `pg_hba.conf` 通用规则之前，为 `relay_workspace` 设置允许规则，只允许 Relay 主机从指定源地址连接 `relay_developer`，并拒绝该角色其他 TCP 和 Unix socket 连接。使用 `pg_hba_file_rules` 检查后重新加载。
+3. 使用 `deploy/relay-workspace-requirements.txt` 将数据库驱动安装到 Relay 专用目录。用只允许服务账号读取的 `/opt/relay-wechat-api/workspace.env` 配置 `PYTHONPATH` 和 `RELAY_WORKSPACE_DSN`。后者连接本机 PostgreSQL 端口，使用新库和新角色。
+4. 更新 Caddy 和 Relay 服务。文件工作目录为 `$RELAY_STATE/workspace-files`，由服务创建。
