@@ -8,6 +8,10 @@ http://{$RELAY_PUBLIC_IP} {
 	respond 404
 }
 
+http://{$RELAY_PUBLIC_IP}:19016 {
+	reverse_proxy 127.0.0.1:9016
+}
+
 https://{$RELAY_PUBLIC_IP} {
 	tls {
 		issuer acme https://acme-v02.api.letsencrypt.org/directory {

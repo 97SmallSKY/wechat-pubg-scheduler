@@ -24,7 +24,7 @@
 
 ## 调用示例
 
-设置 `RELAY_URL` 为公网 HTTPS 地址，`RELAY_TOKEN` 为自己的凭据。所有示例都使用虚构正文，`test` 需替换为实际授权的群别名。
+设置 `RELAY_URL` 为公网 API 地址，`RELAY_TOKEN` 为自己的凭据。固定 IP 部署支持 `http://<公网 IP>:19016` 和 `https://<公网 IP>`，两者使用相同的 Bearer 鉴权。HTTP 会明文传输凭据和内容，HTTPS 使用自动续期的公网证书。所有示例都使用虚构正文，`test` 需替换为实际授权的群别名。
 
 ```sh
 curl -fsS "$RELAY_URL/v1/groups" -H "Authorization: Bearer $RELAY_TOKEN"
@@ -57,7 +57,7 @@ curl -fsS "$RELAY_URL/v1/idioms/chain" \
 
 ## 服务器
 
-Python 3.6+。应用只监听本机 `127.0.0.1:9016`，由独立的 HTTPS 入口转发。图片渲染使用 Docker。微信发送复用现有的 `watch-replies`、`send-group`、`wechat_report.py` 和微信窗口锁。服务器从 `/opt/wechat-automation/archive.env` 读取 `WECHAT_ARCHIVE_GROUPS` 的别名配置。发送功能依赖服务器的微信登录状态。
+Python 3.6+。应用只监听本机 `127.0.0.1:9016`，由公网入口转发。图片渲染使用 Docker。微信发送复用现有的 `watch-replies`、`send-group`、`wechat_report.py` 和微信窗口锁。服务器从 `/opt/wechat-automation/archive.env` 读取 `WECHAT_ARCHIVE_GROUPS` 的别名配置。发送功能依赖服务器的微信登录状态。
 
 1. 构建渲染器 `docker build -f deploy/relay-image.Dockerfile -t relay-image:2 .`。
 2. 安装 `relay/` 到 `/opt/relay-wechat-api/current/`。创建私有状态目录，并在 `/opt/relay-wechat-api/relay.env` 设置 `RELAY_STATE=/opt/relay-wechat-api/state`、`RELAY_VERSION` 为提交版本。
@@ -67,6 +67,6 @@ Python 3.6+。应用只监听本机 `127.0.0.1:9016`，由独立的 HTTPS 入口
 
 ### 固定公网 IP
 
-在云防火墙放行入站 TCP 443。TCP 80 用于证书签发和续期。将 `deploy/relay-wechat.Caddyfile` 安装到 `/opt/relay-wechat-api/Caddyfile`，在 `/opt/relay-wechat-api/public.env` 设置 `RELAY_PUBLIC_IP`。创建同目录下的 `caddy-data` 和 `caddy-config`，保留证书续期状态。拉取 `caddy:2-alpine` 并启动 `deploy/relay-wechat-https.service`。Caddy 使用 Let's Encrypt 短期 IP 证书并自动续期，API 地址为 `https://<公网 IP>`。 [Let's Encrypt IP 地址证书](https://letsencrypt.org/2026/01/15/6day-and-ip-general-availability)
+在云防火墙放行入站 TCP 19016 供 HTTP API 使用。现有 HTTPS 使用 TCP 443，证书签发和续期使用 TCP 80。将 `deploy/relay-wechat.Caddyfile` 安装到 `/opt/relay-wechat-api/Caddyfile`，在 `/opt/relay-wechat-api/public.env` 设置 `RELAY_PUBLIC_IP`。创建同目录下的 `caddy-data` 和 `caddy-config`，保留证书续期状态。拉取 `caddy:2-alpine` 并启动 `deploy/relay-wechat-https.service`。Caddy 使用 Let's Encrypt 短期 IP 证书并自动续期。 [Let's Encrypt IP 地址证书](https://letsencrypt.org/2026/01/15/6day-and-ip-general-availability)
 
 在仓库根目录执行 `python3 -m unittest discover -s tests` 与 `npm test`。
