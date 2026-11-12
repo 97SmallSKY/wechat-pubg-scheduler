@@ -1,0 +1,14 @@
+[Unit]
+Description=Relay WeChat API public HTTPS development tunnel
+After=network-online.target docker.service relay-wechat-api.service
+Wants=network-online.target relay-wechat-api.service
+Requires=docker.service
+
+[Service]
+ExecStart=/usr/bin/docker run --rm --name relay-wechat-tunnel --network host cloudflare/cloudflared:latest tunnel --no-autoupdate --protocol http2 --url http://127.0.0.1:9016
+ExecStop=/usr/bin/docker stop -t 5 relay-wechat-tunnel
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
