@@ -24,6 +24,8 @@
 
 ## 调用示例
 
+Codex 开发者也可以使用仓库里的 [Relay 微信 Skill](../skills/relay-wechat/SKILL.md)。
+
 设置 `RELAY_URL` 为公网 API 地址，`RELAY_TOKEN` 为自己的凭据。固定 IP 部署支持 `http://<公网 IP>:19016` 和 `https://<公网 IP>`，两者使用相同的 Bearer 鉴权。HTTP 会明文传输凭据和内容，HTTPS 使用自动续期的公网证书。所有示例都使用虚构正文，`test` 需替换为实际授权的群别名。
 
 ```sh
