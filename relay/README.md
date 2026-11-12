@@ -76,7 +76,7 @@ Python 3.6+。应用只监听本机 `127.0.0.1:9016`，由公网入口转发。�
 
 ### 数据库与文件工作区
 
-[工作区 API 与 curl 示例](../skills/relay-workspace/references/api.md)提供独立开发库和工作目录的 SQL 与文件操作。工作区使用 HTTPS 和单独的凭据。可用 `python3 -m relay.keys /opt/relay-wechat-api/state/keys.json issue developer-workspace --workspace` 签发。普通微信凭据的群授权不授予工作区权限。
+[工作区 API 与 curl 示例](../skills/relay-workspace/references/api.md)提供独立开发库和工作目录的 SQL 与文件操作。工作区可以通过 HTTP 19016 或 HTTPS 调用，使用单独的凭据。可用 `python3 -m relay.keys /opt/relay-wechat-api/state/keys.json issue developer-workspace --workspace` 签发。凭据没有到期时间，可通过 `revoke developer-workspace` 撤销。普通微信凭据的群授权不授予工作区权限。
 
 1. 在现有 PostgreSQL 上执行 `deploy/relay-workspace.sql`，通过 psql 变量 `workspace_password` 传入新密码。该脚本创建 `relay_developer` 和独立登录角色 `relay_workspace`。
 2. 在 PostgreSQL 的 `pg_hba.conf` 通用规则之前，为 `relay_workspace` 设置允许规则，只允许 Relay 主机从指定源地址连接 `relay_developer`，并拒绝该角色其他 TCP 和 Unix socket 连接。使用 `pg_hba_file_rules` 检查后重新加载。

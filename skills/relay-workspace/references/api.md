@@ -1,6 +1,6 @@
 # Relay 工作区 API
 
-配置 `RELAY_WORKSPACE_URL` 为部署方提供的 HTTPS 地址，并把独立数据凭据设为 `RELAY_WORKSPACE_TOKEN`。所有请求都带上 `Authorization: Bearer $RELAY_WORKSPACE_TOKEN`。
+配置 `RELAY_WORKSPACE_URL` 为部署方提供的 API 地址，固定 IP 部署的 HTTP 端口为 19016。把独立数据凭据设为 `RELAY_WORKSPACE_TOKEN`。所有请求都带上 `Authorization: Bearer $RELAY_WORKSPACE_TOKEN`。凭据在撤销前有效，HTTP 请求的凭据与内容为明文传输。
 
 ## PostgreSQL
 

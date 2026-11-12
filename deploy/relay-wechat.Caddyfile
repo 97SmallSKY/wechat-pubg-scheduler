@@ -9,7 +9,6 @@ http://{$RELAY_PUBLIC_IP} {
 }
 
 http://{$RELAY_PUBLIC_IP}:19016 {
-	respond /v1/workspace/* 404
 	reverse_proxy 127.0.0.1:9016
 }
 
