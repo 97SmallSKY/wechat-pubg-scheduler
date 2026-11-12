@@ -234,7 +234,10 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(content)
 
     def read_body(self, limit, media_type, allow_empty=False):
-        length = int(self.headers.get("Content-Length", "0"))
+        length_header = self.headers.get("Content-Length")
+        if allow_empty and length_header is None:
+            raise APIError(411, "上传文件需要 Content-Length")
+        length = int(length_header or "0")
         minimum = 0 if allow_empty else 1
         if not minimum <= length <= limit:
             raise APIError(400, "请求体为空或超出大小限制")
