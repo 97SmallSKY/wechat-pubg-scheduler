@@ -38,7 +38,7 @@ def execute(request):
 
 def main():
     # libpq buffers the result before Python can limit the returned rows.
-    limit = 160 * 1024 * 1024
+    limit = 256 * 1024 * 1024
     resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
     try:
         result = execute(json.load(sys.stdin))
