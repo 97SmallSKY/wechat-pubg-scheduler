@@ -65,4 +65,8 @@ Python 3.6+。应用只监听本机 `127.0.0.1:9016`，由独立的 HTTPS 入口
 4. 安装并启动 `deploy/relay-wechat-api.service`。使用已有的 HTTPS 反向代理，或安装 `deploy/relay-wechat-tunnel.service` 用 Cloudflare Quick Tunnel 提供开发联调入口。该公网地址会在隧道进程重启后改变。 [Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)
 5. 公网验证 `GET /healthz`、无凭据拒绝、凭据群权限与测试群实际回执。
 
+### 固定公网 IP
+
+在云防火墙放行入站 TCP 443。TCP 80 用于证书签发和续期。将 `deploy/relay-wechat.Caddyfile` 安装到 `/opt/relay-wechat-api/Caddyfile`，在 `/opt/relay-wechat-api/public.env` 设置 `RELAY_PUBLIC_IP`。创建同目录下的 `caddy-data` 和 `caddy-config`，保留证书续期状态。拉取 `caddy:2-alpine` 并启动 `deploy/relay-wechat-https.service`。Caddy 使用 Let's Encrypt 短期 IP 证书并自动续期，API 地址为 `https://<公网 IP>`。 [Let's Encrypt IP 地址证书](https://letsencrypt.org/2026/01/15/6day-and-ip-general-availability)
+
 在仓库根目录执行 `python3 -m unittest discover -s tests` 与 `npm test`。
